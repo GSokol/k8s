@@ -2,9 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "hydra.fullname" . }}
-  {{- if .Release.Namespace }}
   namespace: {{ .Release.Namespace }}
-  {{- end }}
   labels:
 {{ include "hydra.labels" . | indent 4 }}
 spec:
@@ -18,6 +16,10 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "hydra.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- with .Values.deployment.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
     {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -58,9 +60,7 @@ spec:
             {{- end}}
             {{- if .Values.hydra.dangerousAllowInsecureRedirectUrls }}
             "--dangerous-allow-insecure-redirect-urls",
-            {{- range .Values.hydra.dangerousAllowInsecureRedirectUrls }}
-            {{- . | quote | indent 12 }}
-            {{- end}}
+            {{ include "hydra.utils.joinListWithComma" .Values.hydra.dangerousAllowInsecureRedirectUrls | quote }},
             {{- end}}
             "--config",
             "/etc/config/config.yaml"
@@ -76,10 +76,16 @@ spec:
             httpGet:
               path: /health/alive
               port: http-admin
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /health/ready
               port: http-admin
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
           env:
             {{- $issuer := include "hydra.config.urls.issuer" . -}}
             {{- if $issuer }}
@@ -102,8 +108,8 @@ spec:
                   name: {{ include "hydra.fullname" . }}
                   key: secretsCookie
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
+            {{- toYaml .Values.deployment.resources | nindent 12 }}
+      {{- with .Values.deployment.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -111,7 +117,7 @@ spec:
     affinity:
       {{- toYaml . | nindent 8 }}
     {{- end }}
-    {{- with .Values.tolerations }}
+    {{- with .Values.deployment.tolerations }}
     tolerations:
       {{- toYaml . | nindent 8 }}
     {{- end }}
